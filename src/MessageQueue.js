@@ -1,3 +1,5 @@
+'use strict';
+
 const redis = require('redis');
 const bluebird = require('bluebird');
 bluebird.promisifyAll(redis);
@@ -20,8 +22,9 @@ class MessageQueue {
 
     /**
      * Run main program, decide is this a generator
+     * @param {boolean} collectErrors should this instance collect errors
      */
-    run() {
+    run(collectErrors = false) {
         if (!this._stop) return;
 
         this._client = redis.createClient();
@@ -30,6 +33,7 @@ class MessageQueue {
         });
 
         this._stop = false;
+        if (collectErrors) return this._getErrors();
         if (this._isGenerator) {
             this._generateMessage();
         } else {
@@ -47,18 +51,19 @@ class MessageQueue {
 
     /**
      * Pop all errors from errors queue
+     * @private
      */
-    getErrors() {
-        this._client.lpop(this._queueName + ERRORS_QUEUE_TAG, (err, reply) => {
-            if (err) throw err;
+    _getErrors() {
+        this._client.lpopAsync(this._queueName + ERRORS_QUEUE_TAG).then((reply) => {
             if (reply === null) {
                 this._log('All errors processed');
+                this.stop();
                 this._closeConnection();
             } else {
                 this._log(reply);
-                setTimeout(this.getErrors.bind(this), 0);
+                setTimeout(this._getErrors.bind(this), 0);
             }
-        });
+        }).catch(this._onError);
     }
 
     /**

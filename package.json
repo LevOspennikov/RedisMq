@@ -1,16 +1,13 @@
 {
   "name": "redisproj",
   "version": "1.0.0",
-  "description": "",
+  "description": "Redis Mq for test task",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
+  "author": "Lev Ospennikov",
   "license": "MIT",
   "dependencies": {
-    "jasmine": "^3.1.0",
-    "jasmine-expect": "^3.8.3",
+    "bluebird": "^3.5.1",
+    "commander": "^2.16.0",
     "redis": "^2.8.0"
   }
 }
