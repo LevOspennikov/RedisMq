@@ -18,6 +18,9 @@ class MessageQueue {
         this._stop = true;
     }
 
+    /**
+     * Run main program, decide is this a generator
+     */
     run() {
         if (!this._stop) return;
 
@@ -34,10 +37,17 @@ class MessageQueue {
         }
     }
 
+    /**
+     * Stop the Mq, without any warranty,
+     * that program will be interrupted right now
+     */
     stop() {
         this._stop = true;
     }
 
+    /**
+     * Pop all errors from errors queue
+     */
     getErrors() {
         this._client.lpop(this._queueName + ERRORS_QUEUE_TAG, (err, reply) => {
             if (err) throw err;
@@ -51,6 +61,11 @@ class MessageQueue {
         });
     }
 
+    /**
+     * Get message from the message queue
+     * and schedule next _getMessages() call
+     * @private
+     */
     _getMessages() {
         if (this._stop) return this._closeConnection();
 
@@ -74,6 +89,13 @@ class MessageQueue {
         }).catch((err) => { throw err });
     }
 
+    /**
+     * Get message from the message queue
+     * and schedule next _getMessages() call
+     * @param {string} message - message to processed
+     * @throws {error} error in 5 out of 100 cases
+     * @private
+     */
     _processMessage(message) {
         if (parseInt(Math.random() * 100) % 20 == 0) {
             this._log('Error occurred in message: ', message);
@@ -83,6 +105,11 @@ class MessageQueue {
         }
     }
 
+    /**
+     * Checking generator is alive and,
+     * in case of not, become generator if it possible
+     * @private
+     */
     _checkGeneratorIsAlive() {
         this._log('Checking generator is alive...');
         this._client.existsAsync(LAST_GENERATOR_TIME).then((reply) => {
@@ -105,6 +132,11 @@ class MessageQueue {
         }).catch((err) => { throw err });
     }
 
+    /**
+     * Generate message to the message queue
+     * and schedule next _generateMessage() call
+     * @private
+     */
     _generateMessage() {
         if (this._stop) return this._closeConnection();
 
@@ -120,22 +152,36 @@ class MessageQueue {
         }).catch(this._onError);
     }
 
+    /**
+     * Create message with random digit + unix time
+     * @private
+     */
     _createMessage() {
         return this._queueName +  parseInt(Math.random() * 10) + Date.now();
     }
 
-    _log(...arr) {
-        if (_DEV_) {
-            console.log(...arr);
-        }
-    }
 
+    /**
+     * @private
+     */
     _onError(err) {
         throw err;
     }
 
+    /**
+     * @private
+     */
     _closeConnection() {
         this._client.quit();
+    }
+
+    /**
+     * @private
+     */
+    _log(...arr) {
+        if (_DEV_) {
+            console.log(...arr);
+        }
     }
 }
 
