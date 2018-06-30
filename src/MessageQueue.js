@@ -6,20 +6,22 @@ const NEW_TRY_DELAY = 1000; // in ms;
 const NEW_MESSAGE_GENERATE_DELAY = 500; // in ms;
 const LAST_GENERATOR_TIME = 'Last_time_generator_was_alive';
 const ERRORS_QUEUE_TAG = '-Errors';
-const _DEV_ = false;
+const _DEV_ = true;
 
 class MessageQueue {
     constructor (queueName, isGenerator = false) {
         this._isGenerator = isGenerator;
+        this._queueName = queueName;
+        this._count = 0;
+        this._stop = true;
+    }
+
+    run() {
         this._client = redis.createClient();
         this._client.on('error', function(err) {
              this._log('Error occurred ', err)
         });
-        this._queueName = queueName;
-        this._count = 0;
-    }
-
-    run() {
+        this._stop = false;
         if (this._isGenerator) {
             this.generateMessage();
         } else {
@@ -27,8 +29,27 @@ class MessageQueue {
         }
     }
 
+    stop() {
+        this._stop = true;
+    }
+
+    getErrors() {
+        this._client.lpop(this._queueName + ERRORS_QUEUE_TAG, (err, reply) => {
+            if (err) throw err;
+            if (reply === null) {
+                this._log('All errors processed');
+                this._closeConnection();
+            } else {
+                this._log(reply);
+                setTimeout(this.getErrors.bind(this), 0);
+            }
+        });
+    }
+
     getMessages() {
-        if (this._count == CHECK_GENERATOR_COUNT) {
+        if (this._stop) return this._closeConnection();
+
+        if (this._count === CHECK_GENERATOR_COUNT) {
             this._count -= CHECK_GENERATOR_COUNT;
             return this.checkGeneratorIsAlive();
         }
@@ -36,7 +57,7 @@ class MessageQueue {
         this._count++;
         this._client.lpop(this._queueName, (err, reply) => {
             if (err) throw err;
-            if (reply == null) {
+            if (reply === null) {
                 setTimeout(this.getMessages.bind(this), NEW_TRY_DELAY);
             } else {
                 if (parseInt(Math.random() * 100) % 20 == 0) {
@@ -50,23 +71,10 @@ class MessageQueue {
         });
     }
 
-    getErrors() {
-        this._client.lpop(this._queueName + ERRORS_QUEUE_TAG, (err, reply) => {
-            if (err) throw err;
-            if (reply == null) {
-                this._log('All errors processed');
-                this._client.quit();
-            } else {
-                this._log(reply);
-                setTimeout(this.getErrors.bind(this), 0);
-            }
-        });
-    }
-
     checkGeneratorIsAlive() {
         this._log('Checking generator is alive...');
         this._client.exists(LAST_GENERATOR_TIME, (err, reply) => {
-            if (!reply) {
+            if (reply === 0) {
                 this._client.watch(LAST_GENERATOR_TIME);
                 const multiQuery = this._client.multi();
                 multiQuery.set(LAST_GENERATOR_TIME, 1);
@@ -87,6 +95,7 @@ class MessageQueue {
     }
 
     generateMessage() {
+        if (this._stop) return this._closeConnection();
         const genString = this._queueName +  parseInt(Math.random() * 10) + Date.now();
         const multiQuery = this._client.multi();
         multiQuery.set(LAST_GENERATOR_TIME, 1);
@@ -104,6 +113,11 @@ class MessageQueue {
             console.log(...arr);
         }
     }
+
+    _closeConnection() {
+        this._client.quit();
+    }
+
 }
 
 module.exports = MessageQueue;
